@@ -7,7 +7,7 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 // Connect to MongoDB
-mongoose.connect('mongodb://147.93.19.17:27017/dancekatta', {
+mongoose.connect('MONGO_URI=mongodb://dance_katta_user:User%23DanceKatta%402026@localhost:27017/dance_katta_db?authSource=dance_katta_db', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
