@@ -12,50 +12,52 @@ mongoose.connect('mongodb://dance_katta_user:User%23DanceKatta%402026@localhost:
   useUnifiedTopology: true,
 });
 
-// Transaction Schema
+// ─── Schemas ────────────────────────────────────────────────────────────────
+
 const paymentDetailsSchema = new mongoose.Schema({
-  amountPaid: { type: Number, required: true },
-  paymentMethod: { type: String, required: true },
-  paymentStatus: { type: String, required: true },
-  paymentDate: { type: Date, default: Date.now },
-  transactionId: { type: String, required: true },
+  amountPaid:     { type: Number, required: true },
+  paymentMethod:  { type: String, required: true },
+  paymentStatus:  { type: String, required: true },
+  paymentDate:    { type: Date, default: Date.now },
+  transactionId:  { type: String, required: true },
 }, { _id: false });
 
 const transactionSchema = new mongoose.Schema({
-  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  studentName: { type: String, default: null },   // 👈 Added this
-  studentEmail: { type: String, default: null },  // 👈 Added this
-  batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
-  studioName: { type: String, required: true },
-  mode: { type: String, default: 'Online' },
-  status: { type: String, required: true }, // Success/Failure
-  date: { type: Date, default: Date.now },
-  transactionDate: { type: Date, default: Date.now },
-  couponCode: { type: String, default: null },
-  discountPercent: { type: Number, default: 0 },
-  discountAmount: { type: Number, default: 0 },
+  studentId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  studentName:  { type: String, default: null },   // ✅ stored
+  studentEmail: { type: String, default: null },   // ✅ stored
+
+  batchId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
+  batchName:    { type: String, default: null },   // ✅ stored
+  branchName:   { type: String, default: null },   // ✅ stored
+
+  studioName:   { type: String, required: true },
+  mode:         { type: String, default: 'Online' },
+  status:       { type: String, required: true },
+
+  date:             { type: Date, default: Date.now },
+  transactionDate:  { type: Date, default: Date.now },
+
+  couponCode:       { type: String, default: null },
+  discountPercent:  { type: Number, default: 0 },
+  discountAmount:   { type: Number, default: 0 },
+
   platformFeePercent: { type: Number, required: true },
-  gstPercent: { type: Number, required: true },
+  gstPercent:         { type: Number, required: true },
+
   paymentDetails: { type: paymentDetailsSchema, required: true },
 }, { timestamps: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
 
-
 const platformFeeSchema = new mongoose.Schema({
-  feePercent: {
-    type: Number,
-    required: true,
-    default: 10,
-  },
-  gstPercent: {
-    type: Number,
-    required: true,
-    default: 18,
-  },
+  feePercent: { type: Number, required: true, default: 10 },
+  gstPercent: { type: Number, required: true, default: 18 },
 }, { timestamps: true });
 
-const PlatformFee = mongoose.model("PlatformFee", platformFeeSchema);
+const PlatformFee = mongoose.model('PlatformFee', platformFeeSchema);
+
+// ─── App setup ───────────────────────────────────────────────────────────────
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -69,16 +71,16 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// Email configuration
+// ─── Email ───────────────────────────────────────────────────────────────────
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-// Email templates
 const sendSuccessEmail = async (userEmail, transactionData) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -86,20 +88,21 @@ const sendSuccessEmail = async (userEmail, transactionData) => {
     subject: 'Payment Successful - DanceKatta',
     html: `
       <h2>Payment Successful!</h2>
-      <p>Dear Student,</p>
+      <p>Dear ${transactionData.studentName || 'Student'},</p>
       <p>Your payment has been successfully processed.</p>
       <h3>Transaction Details:</h3>
       <ul>
         <li><strong>Studio:</strong> ${transactionData.studioName}</li>
+        <li><strong>Batch:</strong> ${transactionData.batchName || 'N/A'}</li>
+        <li><strong>Branch:</strong> ${transactionData.branchName || 'N/A'}</li>
         <li><strong>Amount:</strong> ₹${transactionData.amount}</li>
         <li><strong>Payment Method:</strong> ${transactionData.mode}</li>
         <li><strong>Transaction ID:</strong> ${transactionData.transactionId}</li>
         <li><strong>Date:</strong> ${new Date().toLocaleDateString()}</li>
       </ul>
       <p>Thank you for choosing DanceKatta!</p>
-    `
+    `,
   };
-
   try {
     await transporter.sendMail(mailOptions);
     console.log('Success email sent to:', userEmail);
@@ -115,18 +118,19 @@ const sendFailureEmail = async (userEmail, transactionData) => {
     subject: 'Payment Failed - DanceKatta',
     html: `
       <h2>Payment Failed</h2>
-      <p>Dear Student,</p>
+      <p>Dear ${transactionData.studentName || 'Student'},</p>
       <p>Unfortunately, your payment could not be processed.</p>
       <h3>Transaction Details:</h3>
       <ul>
         <li><strong>Studio:</strong> ${transactionData.studioName}</li>
+        <li><strong>Batch:</strong> ${transactionData.batchName || 'N/A'}</li>
+        <li><strong>Branch:</strong> ${transactionData.branchName || 'N/A'}</li>
         <li><strong>Amount:</strong> ₹${transactionData.amount}</li>
         <li><strong>Date:</strong> ${new Date().toLocaleDateString()}</li>
       </ul>
       <p>Please try again or contact support.</p>
-    `
+    `,
   };
-
   try {
     await transporter.sendMail(mailOptions);
     console.log('Failure email sent to:', userEmail);
@@ -135,67 +139,70 @@ const sendFailureEmail = async (userEmail, transactionData) => {
   }
 };
 
-// Create Order API
+// ─── Routes ──────────────────────────────────────────────────────────────────
+
+// Create Order
 app.post('/create-order', async (req, res) => {
   try {
     const { amount, currency = 'INR' } = req.body;
-
     const options = {
-      amount: amount * 100, // Convert to paise
+      amount: amount * 100,
       currency,
       receipt: `receipt_${Date.now()}`,
     };
-
     const order = await razorpay.orders.create(options);
-
     res.json({
       success: true,
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
-      key_id: process.env.RAZORPAY_KEY_ID
+      key_id: process.env.RAZORPAY_KEY_ID,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create order',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to create order', error: error.message });
   }
 });
 
-// Verify Payment API
+// Verify Payment
 app.post('/verify-payment', async (req, res) => {
   try {
+    // ✅ All fields destructured including batchName and branchName
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
       studentId,
-      studentName,
+      studentName,    // ✅
       batchId,
+      batchName,      // ✅ ADDED
+      branchName,     // ✅ ADDED
       studioName,
       userEmail,
       amount,
       couponCode,
       discountAmount,
-      discountPercent
+      discountPercent,
     } = req.body;
+
+    // Debug log — remove in production
+    console.log('verify-payment received:', {
+      studentId, studentName, batchId, batchName, branchName, studioName, userEmail, amount
+    });
+
     // Fetch latest platform fee config
     let platformFeePercent = 5;
     let gstPercent = 18;
-
     try {
       const feeConfig = await PlatformFee.findOne().sort({ createdAt: -1 });
-
       if (feeConfig) {
         platformFeePercent = feeConfig.feePercent;
         gstPercent = feeConfig.gstPercent;
       }
     } catch (err) {
-      console.log("Failed to fetch platform fee config, using defaults");
+      console.log('Failed to fetch platform fee config, using defaults');
     }
 
+    // Verify signature
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -203,42 +210,45 @@ app.post('/verify-payment', async (req, res) => {
       .digest('hex');
 
     if (expectedSignature === razorpay_signature) {
-      // Fetch payment details from Razorpay to get actual payment method
+      // Fetch actual payment method from Razorpay
       let paymentMethod = 'Unknown';
       try {
         const payment = await razorpay.payments.fetch(razorpay_payment_id);
-        paymentMethod = payment.method; // upi, card, netbanking, wallet, etc.
+        paymentMethod = payment.method;
       } catch (e) {
         console.log('Failed to fetch payment method:', e.message);
       }
 
-      // Save transaction to database
+      // ✅ Save transaction with ALL fields
       const transaction = new Transaction({
         studentId,
-        studentName: studentName || null,    // 👈 Add this
-        studentEmail: userEmail || null,     // 👈 Add this (userEmail already comes in)
+        studentName:  studentName  || null,
+        studentEmail: userEmail    || null,
         batchId,
-        studioName: studioName || 'Unknown Studio',
-        mode: paymentMethod,
-        status: 'Success',
-        date: new Date(),
+        batchName:    batchName    || null,   // ✅ ADDED
+        branchName:   branchName   || null,   // ✅ ADDED
+        studioName:   studioName   || 'Unknown Studio',
+        mode:         paymentMethod,
+        status:       'Success',
+        date:         new Date(),
         transactionDate: new Date(),
-        couponCode: couponCode || null,
+        couponCode:      couponCode    || null,
         discountPercent: discountPercent || 0,
-        discountAmount: discountAmount || 0,
+        discountAmount:  discountAmount  || 0,
         platformFeePercent,
         gstPercent,
         paymentDetails: {
-          amountPaid: amount,
+          amountPaid:    amount,
           paymentMethod: 'Razorpay',
           paymentStatus: 'Authorized',
-          transactionId: razorpay_payment_id
-        }
+          transactionId: razorpay_payment_id,
+        },
       });
 
       await transaction.save();
+      console.log('Transaction saved:', transaction._id);
 
-      // Add student to batch's enrolled_students array (correct field name)
+      // Add student to batch enrolled_students
       try {
         await mongoose.connection.db.collection('batches').updateOne(
           { _id: new mongoose.Types.ObjectId(batchId) },
@@ -249,7 +259,7 @@ app.post('/verify-payment', async (req, res) => {
         console.error('Failed to update batch enrolled_students:', e.message);
       }
 
-      // Add batch to user's enrolled_batches array (correct field name)
+      // Add batch to user enrolled_batches
       try {
         await mongoose.connection.db.collection('users').updateOne(
           { _id: new mongoose.Types.ObjectId(studentId) },
@@ -263,10 +273,13 @@ app.post('/verify-payment', async (req, res) => {
       // Send success email
       if (userEmail) {
         await sendSuccessEmail(userEmail, {
+          studentName,
           studioName: studioName || 'Unknown Studio',
+          batchName:  batchName  || null,
+          branchName: branchName || null,
           amount,
           mode: paymentMethod,
-          transactionId: razorpay_payment_id
+          transactionId: razorpay_payment_id,
         });
       }
 
@@ -274,33 +287,30 @@ app.post('/verify-payment', async (req, res) => {
         success: true,
         message: 'Payment verified and transaction saved',
         payment_id: razorpay_payment_id,
-        transaction_id: transaction._id
+        transaction_id: transaction._id,
       });
+
     } else {
-      // Send failure email
+      // Signature mismatch — send failure email
       if (userEmail) {
         await sendFailureEmail(userEmail, {
+          studentName,
           studioName: studioName || 'Unknown Studio',
+          batchName:  batchName  || null,
+          branchName: branchName || null,
           amount,
-
         });
       }
-
-      res.status(400).json({
-        success: false,
-        message: 'Payment verification failed'
-      });
+      res.status(400).json({ success: false, message: 'Payment verification failed' });
     }
+
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Verification error',
-      error: error.message
-    });
+    console.error('verify-payment error:', error);
+    res.status(500).json({ success: false, message: 'Verification error', error: error.message });
   }
 });
 
-// Webhook endpoint
+// Webhook
 app.post('/webhook', async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
@@ -321,31 +331,18 @@ app.post('/webhook', async (req, res) => {
     if (event.event === 'payment.captured') {
       const payment = event.payload.payment.entity;
       console.log('Payment captured:', payment.id, 'Amount:', payment.amount);
-
-      // Update transaction status if needed
       await Transaction.updateOne(
         { 'paymentDetails.transactionId': payment.id },
-        {
-          $set: {
-            'paymentDetails.paymentStatus': 'Captured',
-            'paymentDetails.paymentDate': new Date()
-          }
-        }
+        { $set: { 'paymentDetails.paymentStatus': 'Captured', 'paymentDetails.paymentDate': new Date() } }
       );
     }
 
     if (event.event === 'payment.failed') {
       const payment = event.payload.payment.entity;
       console.log('Payment failed:', payment.id);
-
-      // Update transaction status
       await Transaction.updateOne(
         { 'paymentDetails.transactionId': payment.id },
-        {
-          $set: {
-            'paymentDetails.paymentStatus': 'Failed'
-          }
-        }
+        { $set: { 'paymentDetails.paymentStatus': 'Failed' } }
       );
     }
 
