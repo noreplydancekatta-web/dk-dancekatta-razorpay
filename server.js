@@ -34,12 +34,28 @@ const transactionSchema = new mongoose.Schema({
   couponCode: { type: String, default: null },
   discountPercent: { type: Number, default: 0 },
   discountAmount: { type: Number, default: 0 },
-  platformFeePercent: { type: Number, default: 5 },
-  gstPercent: { type: Number, default: 18 },
+  platformFeePercent: { type: Number, required: true },
+  gstPercent: { type: Number, required: true },
   paymentDetails: { type: paymentDetailsSchema, required: true },
 }, { timestamps: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
+
+
+const platformFeeSchema = new mongoose.Schema({
+  feePercent: {
+    type: Number,
+    required: true,
+    default: 10,
+  },
+  gstPercent: {
+    type: Number,
+    required: true,
+    default: 18,
+  },
+}, { timestamps: true });
+
+const PlatformFee = mongoose.model("PlatformFee", platformFeeSchema);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -165,6 +181,20 @@ app.post('/verify-payment', async (req, res) => {
       discountAmount,
       discountPercent
     } = req.body;
+    // Fetch latest platform fee config
+    let platformFeePercent = 5;
+    let gstPercent = 18;
+
+    try {
+      const feeConfig = await PlatformFee.findOne().sort({ createdAt: -1 });
+
+      if (feeConfig) {
+        platformFeePercent = feeConfig.feePercent;
+        gstPercent = feeConfig.gstPercent;
+      }
+    } catch (err) {
+      console.log("Failed to fetch platform fee config, using defaults");
+    }
 
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto
@@ -196,8 +226,8 @@ app.post('/verify-payment', async (req, res) => {
         couponCode: couponCode || null,
         discountPercent: discountPercent || 0,
         discountAmount: discountAmount || 0,
-        platformFeePercent: 5,
-        gstPercent: 18,
+        platformFeePercent,
+        gstPercent,
         paymentDetails: {
           amountPaid: amount,
           paymentMethod: 'Razorpay',
