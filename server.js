@@ -23,6 +23,8 @@ const paymentDetailsSchema = new mongoose.Schema({
 
 const transactionSchema = new mongoose.Schema({
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  studentName: { type: String, default: null },   // 👈 Added this
+  studentEmail: { type: String, default: null },  // 👈 Added this
   batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
   studioName: { type: String, required: true },
   mode: { type: String, default: 'Online' },
@@ -81,7 +83,7 @@ const sendSuccessEmail = async (userEmail, transactionData) => {
       <p>Thank you for choosing DanceKatta!</p>
     `
   };
-  
+
   try {
     await transporter.sendMail(mailOptions);
     console.log('Success email sent to:', userEmail);
@@ -108,7 +110,7 @@ const sendFailureEmail = async (userEmail, transactionData) => {
       <p>Please try again or contact support.</p>
     `
   };
-  
+
   try {
     await transporter.sendMail(mailOptions);
     console.log('Failure email sent to:', userEmail);
@@ -121,7 +123,7 @@ const sendFailureEmail = async (userEmail, transactionData) => {
 app.post('/create-order', async (req, res) => {
   try {
     const { amount, currency = 'INR' } = req.body;
-    
+
     const options = {
       amount: amount * 100, // Convert to paise
       currency,
@@ -129,7 +131,7 @@ app.post('/create-order', async (req, res) => {
     };
 
     const order = await razorpay.orders.create(options);
-    
+
     res.json({
       success: true,
       order_id: order.id,
@@ -149,11 +151,12 @@ app.post('/create-order', async (req, res) => {
 // Verify Payment API
 app.post('/verify-payment', async (req, res) => {
   try {
-    const { 
-      razorpay_order_id, 
-      razorpay_payment_id, 
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
       razorpay_signature,
       studentId,
+      studentName,
       batchId,
       studioName,
       userEmail,
@@ -162,7 +165,7 @@ app.post('/verify-payment', async (req, res) => {
       discountAmount,
       discountPercent
     } = req.body;
-    
+
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -182,6 +185,8 @@ app.post('/verify-payment', async (req, res) => {
       // Save transaction to database
       const transaction = new Transaction({
         studentId,
+        studentName: studentName || null,    // 👈 Add this
+        studentEmail: userEmail || null,     // 👈 Add this (userEmail already comes in)
         batchId,
         studioName: studioName || 'Unknown Studio',
         mode: paymentMethod,
@@ -270,7 +275,7 @@ app.post('/webhook', async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
     const body = req.body;
-    
+
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
       .update(body)
@@ -286,12 +291,12 @@ app.post('/webhook', async (req, res) => {
     if (event.event === 'payment.captured') {
       const payment = event.payload.payment.entity;
       console.log('Payment captured:', payment.id, 'Amount:', payment.amount);
-      
+
       // Update transaction status if needed
       await Transaction.updateOne(
         { 'paymentDetails.transactionId': payment.id },
-        { 
-          $set: { 
+        {
+          $set: {
             'paymentDetails.paymentStatus': 'Captured',
             'paymentDetails.paymentDate': new Date()
           }
@@ -302,12 +307,12 @@ app.post('/webhook', async (req, res) => {
     if (event.event === 'payment.failed') {
       const payment = event.payload.payment.entity;
       console.log('Payment failed:', payment.id);
-      
+
       // Update transaction status
       await Transaction.updateOne(
         { 'paymentDetails.transactionId': payment.id },
-        { 
-          $set: { 
+        {
+          $set: {
             'paymentDetails.paymentStatus': 'Failed'
           }
         }
