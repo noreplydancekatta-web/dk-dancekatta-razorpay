@@ -239,8 +239,12 @@ app.post('/verify-payment', async (req, res) => {
       } catch (err) {
         console.log("Snapshot fetch error:", err.message);
       }
-      const studentNameFinal = user?.name || studentName || "Unknown";
-      const studentEmailFinal = user?.email || userEmail || "Unknown";
+      const studentNameFinal =
+        user
+          ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unknown"
+          : studentName || "Unknown";
+      const studentEmailFinal =
+        user?.email || userEmail || "Unknown";
 
       const batchNameFinal = batch?.batchName || batchName || "Unknown Batch";
       const branchNameFinal = branch?.name || branchName || "Unknown Branch";
