@@ -15,35 +15,35 @@ mongoose.connect('mongodb://dance_katta_user:User%23DanceKatta%402026@localhost:
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
 const paymentDetailsSchema = new mongoose.Schema({
-  amountPaid:     { type: Number, required: true },
-  paymentMethod:  { type: String, required: true },
-  paymentStatus:  { type: String, required: true },
-  paymentDate:    { type: Date, default: Date.now },
-  transactionId:  { type: String, required: true },
+  amountPaid: { type: Number, required: true },
+  paymentMethod: { type: String, required: true },
+  paymentStatus: { type: String, required: true },
+  paymentDate: { type: Date, default: Date.now },
+  transactionId: { type: String, required: true },
 }, { _id: false });
 
 const transactionSchema = new mongoose.Schema({
-  studentId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  studentName:  { type: String, default: null },   // ✅ stored
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  studentName: { type: String, default: null },   // ✅ stored
   studentEmail: { type: String, default: null },   // ✅ stored
 
-  batchId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
-  batchName:    { type: String, default: null },   // ✅ stored
-  branchName:   { type: String, default: null },   // ✅ stored
+  batchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Batch', required: true },
+  batchName: { type: String, default: null },   // ✅ stored
+  branchName: { type: String, default: null },   // ✅ stored
 
-  studioName:   { type: String, required: true },
-  mode:         { type: String, default: 'Online' },
-  status:       { type: String, required: true },
+  studioName: { type: String, required: true },
+  mode: { type: String, default: 'Online' },
+  status: { type: String, required: true },
 
-  date:             { type: Date, default: Date.now },
-  transactionDate:  { type: Date, default: Date.now },
+  date: { type: Date, default: Date.now },
+  transactionDate: { type: Date, default: Date.now },
 
-  couponCode:       { type: String, default: null },
-  discountPercent:  { type: Number, default: 0 },
-  discountAmount:   { type: Number, default: 0 },
+  couponCode: { type: String, default: null },
+  discountPercent: { type: Number, default: 0 },
+  discountAmount: { type: Number, default: 0 },
 
   platformFeePercent: { type: Number, required: true },
-  gstPercent:         { type: Number, required: true },
+  gstPercent: { type: Number, required: true },
 
   paymentDetails: { type: paymentDetailsSchema, required: true },
 }, { timestamps: true });
@@ -57,6 +57,10 @@ const platformFeeSchema = new mongoose.Schema({
 
 const PlatformFee = mongoose.model('PlatformFee', platformFeeSchema);
 
+
+const Batch = mongoose.model('Batch', new mongoose.Schema({}, { strict: false }));
+const Branch = mongoose.model('Branch', new mongoose.Schema({}, { strict: false }));
+const User = mongoose.model('User', new mongoose.Schema({}, { strict: false }));
 // ─── App setup ───────────────────────────────────────────────────────────────
 
 const app = express();
@@ -80,7 +84,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
 });
-// console.log("Email to send:", userEmail);
+
 const sendSuccessEmail = async (userEmail, transactionData) => {
   const mailOptions = {
     from: process.env.EMAIL_USER,
@@ -219,26 +223,52 @@ app.post('/verify-payment', async (req, res) => {
         console.log('Failed to fetch payment method:', e.message);
       }
 
+
+      // 🔥 Fetch actual data from DB (source of truth)
+      let user = null;
+      let batch = null;
+      let branch = null;
+
+      try {
+        user = await User.findById(studentId);
+        batch = await Batch.findById(batchId);
+
+        if (batch?.branch) {
+          branch = await Branch.findById(batch.branch);
+        }
+      } catch (err) {
+        console.log("Snapshot fetch error:", err.message);
+      }
+      const studentNameFinal =
+        user
+          ? `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unknown"
+          : studentName || "Unknown";
+      const studentEmailFinal =
+        user?.email || userEmail || "Unknown";
+
+      const batchNameFinal = batch?.batchName || batchName || "Unknown Batch";
+      const branchNameFinal = branch?.name || branchName || "Unknown Branch";
+
       // ✅ Save transaction with ALL fields
       const transaction = new Transaction({
         studentId,
-        studentName:  studentName  || null,
-        studentEmail: userEmail    || null,
+        studentName: studentNameFinal,
+        studentEmail: studentEmailFinal,
+        batchName: batchNameFinal,
+        branchName: branchNameFinal,
         batchId,
-        batchName:    batchName    || null,   // ✅ ADDED
-        branchName:   branchName   || null,   // ✅ ADDED
-        studioName:   studioName   || 'Unknown Studio',
-        mode:         paymentMethod,
-        status:       'Success',
-        date:         new Date(),
+        studioName: studioName || 'Unknown Studio',
+        mode: paymentMethod,
+        status: 'Success',
+        date: new Date(),
         transactionDate: new Date(),
-        couponCode:      couponCode    || null,
+        couponCode: couponCode || null,
         discountPercent: discountPercent || 0,
-        discountAmount:  discountAmount  || 0,
+        discountAmount: discountAmount || 0,
         platformFeePercent,
         gstPercent,
         paymentDetails: {
-          amountPaid:    amount,
+          amountPaid: amount,
           paymentMethod: 'Razorpay',
           paymentStatus: 'Authorized',
           transactionId: razorpay_payment_id,
@@ -273,10 +303,10 @@ app.post('/verify-payment', async (req, res) => {
       // Send success email
       if (userEmail) {
         await sendSuccessEmail(userEmail, {
-          studentName,
+          studentName: studentNameFinal,
           studioName: studioName || 'Unknown Studio',
-          batchName:  batchName  || null,
-          branchName: branchName || null,
+          batchName: batchNameFinal,
+          branchName: branchNameFinal,
           amount,
           mode: paymentMethod,
           transactionId: razorpay_payment_id,
@@ -294,10 +324,10 @@ app.post('/verify-payment', async (req, res) => {
       // Signature mismatch — send failure email
       if (userEmail) {
         await sendFailureEmail(userEmail, {
-          studentName,
+          studentName: studentNameFinal,
           studioName: studioName || 'Unknown Studio',
-          batchName:  batchName  || null,
-          branchName: branchName || null,
+          batchName: batchNameFinal,
+          branchName: branchNameFinal,
           amount,
         });
       }
